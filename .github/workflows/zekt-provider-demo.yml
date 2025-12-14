@@ -1,0 +1,92 @@
+name: Zekt Provider Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      zektDemoUserName:
+        description: 'Your wished zekt disciple name'
+        required: true
+        default: ''
+        type: string
+      zektDemoStatus:
+        description: 'Your wished zekt status demo'
+        required: true
+        default: 'wakeup'
+        type: string
+
+
+jobs:
+  send-to-zekt:
+    name: Send Event & Message to Zekt
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # Required for OIDC authentication
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build JSON Payload
+        id: build-payload
+        shell: pwsh
+        run: |
+          # Collect all input parameters into a structured JSON object
+          Write-Host "Pre-collecting input parameters..."
+          Write-Host ("CorrelationId: " + "${{ github.run_id }}")
+
+          $payload = @{
+              zektDemoUserName = "${{ inputs.zektDemoUserName }}"
+              department = "${{ inputs.zektDemoStatus }}"
+              timestamp = (Get-Date -Format "o")
+              workflowRunId = "${{ github.run_id }}"
+              repository = "${{ github.repository }}"
+              sender = "${{ github.actor }}"
+              description = "Demo message sent from Zekt Provider Demo workflow"
+              additionalInfo = @{
+                  demoNote = "You can send any arbitrary JSON structure as payload"
+                  demoNoteSize = "- as long as it is less then 0.5 MB in size"
+              }
+          }
+          
+          Write-Host "Post-collecting input parameters..."
+          
+          # Convert to JSON string
+          $jsonPayload = $payload | ConvertTo-Json -Compress
+          
+          # Output for next step
+          Write-Host "Payload built:"
+          Write-Host $jsonPayload
+          
+          # Set as output (escape for GitHub Actions)
+          "payload=$jsonPayload" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          
+      - name: Display Payload (Debug)
+        run: |
+          echo "🔍 Payload to be sent to Zekt:"
+          echo '${{ steps.build-payload.outputs.payload }}'
+
+      - name: Send message to Zekt using Zekt Action
+        id: zekt
+        uses: zekt-dev-org/zekt-action@v2.0.1
+        with:
+          event-type: 'provider-demo-event'
+          payload: ${{ steps.build-payload.outputs.payload }}
+
+      - name: Confirmation
+        run: |
+          echo "✅ Event sent to Zekt successfully!"
+          echo ""
+          echo "📋 Summary:"
+          echo "  - Event Type: provider-test-event"
+          echo "  - Event ID: ${{ steps.zekt.outputs.event-id }}"
+          echo "  - Status: ${{ steps.zekt.outputs.status }}"
+          echo "  - Consumers Notified: ${{ steps.zekt.outputs.consumers-notified }}"
+          echo "  - Workflow Run: ${{ github.run_id }}"
+          echo "  - Repository: ${{ github.repository }}"
+          echo "  - Triggered by: ${{ github.actor }}"
+          echo ""
+          echo "🔗 Next steps:"
+          echo "  1. Check Zekt webhook-events & message"
+          echo "  2. Verify event was received and logged"
+          echo "  3. Verify consumers received the forwarded event & correlated message"
