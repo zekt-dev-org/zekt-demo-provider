@@ -18,6 +18,9 @@ on:
         default: 'wakeup'
         type: string
 
+env:
+  ZEKT_API_BASE: https://fxdevzektapp.azurewebsites.net
+  CORRELATION_ID: ${{ inputs.zektCorrelationId }}
 
 jobs:
   send-to-zekt:
@@ -28,17 +31,102 @@ jobs:
       contents: read
     
     steps:
+      # ========================================
+      # STEP 1: Receive Workflow Dispatch
+      # ========================================
+      - name: Step 1 - Receive Workflow Dispatch
+        shell: pwsh
+        run: |
+          Write-Host "📥 Received workflow dispatch" -ForegroundColor Green
+          Write-Host "Correlation ID: ${{ env.CORRELATION_ID }}"
+          Write-Host "User: ${{ inputs.zektDemoUserName }}"
+          Write-Host "Status: ${{ inputs.zektDemoStatus }}"
+          
+          # Report progress to Zekt (only if correlationId starts with 'demo-')
+          $correlationId = "${{ env.CORRELATION_ID }}"
+          if ($correlationId -and $correlationId.StartsWith("demo-")) {
+            $body = @{
+              correlationId = $correlationId
+              workflow = "provider"
+              step = 1
+              totalSteps = 5
+              status = "in_progress"
+              message = "Received workflow dispatch"
+              runId = ${{ github.run_id }}
+              runUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            } | ConvertTo-Json
+            
+            try {
+              Invoke-RestMethod -Uri "${{ env.ZEKT_API_BASE }}/api/demo/progress" `
+                -Method Post `
+                -ContentType "application/json" `
+                -Body $body
+              Write-Host "✅ Progress reported: Step 1" -ForegroundColor Cyan
+            } catch {
+              Write-Host "⚠️ Failed to report progress: $_" -ForegroundColor Yellow
+            }
+          }
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build JSON Payload
+      # ========================================
+      # STEP 2: Process Input Data
+      # ========================================
+      - name: Step 2 - Process Input Data
+        id: process-input
+        shell: pwsh
+        run: |
+          Write-Host "⚙️ Processing input data..." -ForegroundColor Yellow
+          
+          # Simulate processing time
+          Start-Sleep -Seconds 1
+          
+          $userName = "${{ inputs.zektDemoUserName }}"
+          $userStatus = "${{ inputs.zektDemoStatus }}"
+          
+          if ($userStatus -eq "wakeup") {
+            Write-Host "☀️ $userName wants to wake up!" -ForegroundColor Cyan
+          } else {
+            Write-Host "🌙 $userName wants to go to sleep!" -ForegroundColor Magenta
+          }
+          
+          # Report progress
+          $correlationId = "${{ env.CORRELATION_ID }}"
+          if ($correlationId -and $correlationId.StartsWith("demo-")) {
+            $body = @{
+              correlationId = $correlationId
+              workflow = "provider"
+              step = 2
+              totalSteps = 5
+              status = "in_progress"
+              message = "Processing input data"
+            } | ConvertTo-Json
+            
+            try {
+              Invoke-RestMethod -Uri "${{ env.ZEKT_API_BASE }}/api/demo/progress" `
+                -Method Post `
+                -ContentType "application/json" `
+                -Body $body
+              Write-Host "✅ Progress reported: Step 2" -ForegroundColor Cyan
+            } catch {
+              Write-Host "⚠️ Failed to report progress: $_" -ForegroundColor Yellow
+            }
+          }
+
+      # ========================================
+      # STEP 3: Prepare Zekt Event Payload
+      # ========================================
+      - name: Step 3 - Build JSON Payload
         id: build-payload
         shell: pwsh
         run: |
+          Write-Host "📦 Preparing event payload for consumer..." -ForegroundColor Yellow
+          
+          # Simulate preparation time
+          Start-Sleep -Seconds 1
+          
           # Collect all input parameters into a structured JSON object
-          Write-Host "Pre-collecting input parameters..."
-          Write-Host ("CorrelationId: " + "${{ github.run_id }}")
-
           $payload = @{
               zektDemoUserName = "${{ inputs.zektDemoUserName }}"
               department = "${{ inputs.zektDemoStatus }}"
@@ -54,22 +142,68 @@ jobs:
               }
           }
           
-          Write-Host "Post-collecting input parameters..."
-          
           # Convert to JSON string
           $jsonPayload = $payload | ConvertTo-Json -Compress
           
-          # Output for next step
           Write-Host "Payload built:"
           Write-Host $jsonPayload
           
-          # Set as output (escape for GitHub Actions)
+          # Set as output
           "payload=$jsonPayload" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           
-      - name: Display Payload (Debug)
+          # Report progress
+          $correlationId = "${{ env.CORRELATION_ID }}"
+          if ($correlationId -and $correlationId.StartsWith("demo-")) {
+            $body = @{
+              correlationId = $correlationId
+              workflow = "provider"
+              step = 3
+              totalSteps = 5
+              status = "in_progress"
+              message = "Building event payload"
+            } | ConvertTo-Json
+            
+            try {
+              Invoke-RestMethod -Uri "${{ env.ZEKT_API_BASE }}/api/demo/progress" `
+                -Method Post `
+                -ContentType "application/json" `
+                -Body $body
+              Write-Host "✅ Progress reported: Step 3" -ForegroundColor Cyan
+            } catch {
+              Write-Host "⚠️ Failed to report progress: $_" -ForegroundColor Yellow
+            }
+          }
+
+      # ========================================
+      # STEP 4: Send to Zekt (Dispatch to Consumer)
+      # ========================================
+      - name: Step 4 - Send to Zekt
+        shell: pwsh
         run: |
-          echo "🔍 Payload to be sent to Zekt:"
-          echo '${{ steps.build-payload.outputs.payload }}'
+          Write-Host "🚀 Dispatching event to consumer via Zekt..." -ForegroundColor Yellow
+          
+          # Report progress BEFORE sending (in case zekt-action takes time)
+          $correlationId = "${{ env.CORRELATION_ID }}"
+          if ($correlationId -and $correlationId.StartsWith("demo-")) {
+            $body = @{
+              correlationId = $correlationId
+              workflow = "provider"
+              step = 4
+              totalSteps = 5
+              status = "in_progress"
+              message = "Sending via repository_dispatch"
+            } | ConvertTo-Json
+            
+            try {
+              Invoke-RestMethod -Uri "${{ env.ZEKT_API_BASE }}/api/demo/progress" `
+                -Method Post `
+                -ContentType "application/json" `
+                -Body $body
+              Write-Host "✅ Progress reported: Step 4" -ForegroundColor Cyan
+            } catch {
+              Write-Host "⚠️ Failed to report progress: $_" -ForegroundColor Yellow
+            }
+          }
 
       - name: Send message to Zekt using Zekt Action
         id: zekt
@@ -78,20 +212,47 @@ jobs:
           event-type: 'provider-demo-event'
           payload: ${{ steps.build-payload.outputs.payload }}
 
-      - name: Confirmation
+      # ========================================
+      # STEP 5: Complete
+      # ========================================
+      - name: Step 5 - Complete
+        shell: pwsh
         run: |
-          echo "✅ Event sent to Zekt successfully!"
-          echo ""
-          echo "📋 Summary:"
-          echo "  - Event Type: provider-test-event"
-          echo "  - Event ID: ${{ steps.zekt.outputs.event-id }}"
-          echo "  - Status: ${{ steps.zekt.outputs.status }}"
-          echo "  - Consumers Notified: ${{ steps.zekt.outputs.consumers-notified }}"
-          echo "  - Workflow Run: ${{ github.run_id }}"
-          echo "  - Repository: ${{ github.repository }}"
-          echo "  - Triggered by: ${{ github.actor }}"
-          echo ""
-          echo "🔗 Next steps:"
-          echo "  1. Check Zekt webhook-events & message"
-          echo "  2. Verify event was received and logged"
-          echo "  3. Verify consumers received the forwarded event & correlated message"
+          Write-Host "✅ Event sent to Zekt successfully!" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "📋 Summary:"
+          Write-Host "  - Event Type: provider-demo-event"
+          Write-Host "  - Event ID: ${{ steps.zekt.outputs.event-id }}"
+          Write-Host "  - Status: ${{ steps.zekt.outputs.status }}"
+          Write-Host "  - Consumers Notified: ${{ steps.zekt.outputs.consumers-notified }}"
+          Write-Host "  - Workflow Run: ${{ github.run_id }}"
+          Write-Host "  - Repository: ${{ github.repository }}"
+          Write-Host "  - Triggered by: ${{ github.actor }}"
+          Write-Host ""
+          Write-Host "🔗 Next steps:"
+          Write-Host "  1. Check Zekt webhook-events & message"
+          Write-Host "  2. Verify event was received and logged"
+          Write-Host "  3. Verify consumers received the forwarded event & correlated message"
+          
+          # Report completion
+          $correlationId = "${{ env.CORRELATION_ID }}"
+          if ($correlationId -and $correlationId.StartsWith("demo-")) {
+            $body = @{
+              correlationId = $correlationId
+              workflow = "provider"
+              step = 5
+              totalSteps = 5
+              status = "completed"
+              message = "Provider workflow completed"
+            } | ConvertTo-Json
+            
+            try {
+              Invoke-RestMethod -Uri "${{ env.ZEKT_API_BASE }}/api/demo/progress" `
+                -Method Post `
+                -ContentType "application/json" `
+                -Body $body
+              Write-Host "✅ Progress reported: Step 5 (COMPLETED)" -ForegroundColor Cyan
+            } catch {
+              Write-Host "⚠️ Failed to report progress: $_" -ForegroundColor Yellow
+            }
+          }
