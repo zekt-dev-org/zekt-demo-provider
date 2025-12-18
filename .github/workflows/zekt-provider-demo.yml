@@ -3,6 +3,10 @@ name: Zekt Provider Demo
 on:
   workflow_dispatch:
     inputs:
+      zektCorrelationId:
+        description: 'Demo correlation ID for tracking'
+        required: false
+        type: string
       zektDemoUserName:
         description: 'Your wished zekt disciple name'
         required: true
@@ -43,6 +47,7 @@ jobs:
               repository = "${{ github.repository }}"
               sender = "${{ github.actor }}"
               description = "Demo message sent from Zekt Provider Demo workflow"
+              inputCorrelationId = "${{ inputs.zektCorrelationId }}"
               additionalInfo = @{
                   demoNote = "You can send any arbitrary JSON structure as payload"
                   demoNoteSize = "- as long as it is less then 0.5 MB in size"
