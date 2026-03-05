@@ -232,8 +232,9 @@ jobs:
 
       # ── Step 4: Dispatch to consumer via zekt-action ──────────────────
       - name: "Step 4: Dispatch to consumer via Zekt"
-        uses: zekt-dev-org/zekt-action@v1
+        uses: zekt-dev-org/zekt-action@v2.1.0
         with:
+          event-type: ship-it-demo
           payload: |
             {
               "html_b64": "${{ steps.generate.outputs.html_b64 }}",
