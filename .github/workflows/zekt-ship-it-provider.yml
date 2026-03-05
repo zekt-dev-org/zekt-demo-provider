@@ -22,7 +22,13 @@ on:
 jobs:
   build-page:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # Required for OIDC authentication with zekt-action
+      contents: read
     steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       # ── Step 1: Receive & report ──────────────────────────────────────
       - name: "Step 1: Receive build config"
