@@ -207,7 +207,7 @@ jobs:
 
       - name: Send message to Zekt using Zekt Action
         id: zekt
-        uses: zekt-dev-org/zekt-action@v2.0.1
+        uses: zekt-dev-org/zekt-action@v2.1.0
         with:
           event-type: 'provider-demo-event'
           payload: ${{ steps.build-payload.outputs.payload }}
