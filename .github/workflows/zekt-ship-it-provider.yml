@@ -40,18 +40,29 @@ jobs:
           echo "  Theme:    ${{ inputs.zektDemoTheme }}"
           echo "  Correlation: ${{ inputs.zektCorrelationId }}"
 
-          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "correlationId": "${{ inputs.zektCorrelationId }}",
-              "workflow": "provider",
-              "step": 1,
-              "totalSteps": 5,
-              "status": "in_progress",
-              "message": "Build config received",
-              "runId": "${{ github.run_id }}",
-              "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            }'
+          DEMO_API="${{ vars.ZEKT_DEMO_API }}"
+          echo "📡 ZEKT_DEMO_API = '${DEMO_API:-<NOT SET>}'"
+          if [ -z "$DEMO_API" ]; then
+            echo "::warning::ZEKT_DEMO_API variable is not set! Progress reporting will not work."
+          else
+            HTTP_CODE=$(curl -s -o /tmp/curl_response.txt -w "%{http_code}" -X POST "${DEMO_API}/api/demo/progress" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "correlationId": "${{ inputs.zektCorrelationId }}",
+                "workflow": "provider",
+                "step": 1,
+                "totalSteps": 5,
+                "status": "in_progress",
+                "message": "Build config received",
+                "runId": ${{ github.run_id }},
+                "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }') || HTTP_CODE="000"
+            echo "📡 Progress report: HTTP $HTTP_CODE"
+            cat /tmp/curl_response.txt 2>/dev/null && echo
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "::warning::Progress report failed with HTTP $HTTP_CODE"
+            fi
+          fi
 
       # ── Step 2: Validate ──────────────────────────────────────────────
       - name: "Step 2: Validate & sanitize"
@@ -59,50 +70,62 @@ jobs:
           echo "🔍 Validating inputs..."
           sleep 1
 
+          DEMO_API="${{ vars.ZEKT_DEMO_API }}"
+
+          report_progress() {
+            local JSON_BODY="$1"
+            if [ -z "$DEMO_API" ]; then
+              echo "::warning::ZEKT_DEMO_API not set — skipping progress report"
+              return
+            fi
+            HTTP_CODE=$(curl -s -o /tmp/curl_response.txt -w "%{http_code}" -X POST "${DEMO_API}/api/demo/progress" \
+              -H "Content-Type: application/json" \
+              -d "$JSON_BODY") || HTTP_CODE="000"
+            echo "📡 Progress report: HTTP $HTTP_CODE"
+            cat /tmp/curl_response.txt 2>/dev/null && echo
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "::warning::Progress report failed with HTTP $HTTP_CODE"
+            fi
+          }
+
           TEMPLATE="${{ inputs.zektDemoTemplate }}"
           if [[ ! "$TEMPLATE" =~ ^(landing-page|status-badge|team-card)$ ]]; then
             echo "❌ Invalid template: $TEMPLATE"
-            curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "correlationId": "${{ inputs.zektCorrelationId }}",
-                "workflow": "provider",
-                "step": 2,
-                "totalSteps": 5,
-                "status": "failed",
-                "message": "Invalid template: '"$TEMPLATE"'"
-              }'
+            report_progress '{
+              "correlationId": "${{ inputs.zektCorrelationId }}",
+              "workflow": "provider",
+              "step": 2,
+              "totalSteps": 5,
+              "status": "failed",
+              "message": "Invalid template: '"$TEMPLATE"'"
+            }'
             exit 1
           fi
 
           THEME="${{ inputs.zektDemoTheme }}"
           if [[ ! "$THEME" =~ ^(ocean|sunset|forest|midnight|coral)$ ]]; then
             echo "❌ Invalid theme: $THEME"
-            curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "correlationId": "${{ inputs.zektCorrelationId }}",
-                "workflow": "provider",
-                "step": 2,
-                "totalSteps": 5,
-                "status": "failed",
-                "message": "Invalid theme: '"$THEME"'"
-              }'
+            report_progress '{
+              "correlationId": "${{ inputs.zektCorrelationId }}",
+              "workflow": "provider",
+              "step": 2,
+              "totalSteps": 5,
+              "status": "failed",
+              "message": "Invalid theme: '"$THEME"'"
+            }'
             exit 1
           fi
 
           echo "✅ Inputs valid"
 
-          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "correlationId": "${{ inputs.zektCorrelationId }}",
-              "workflow": "provider",
-              "step": 2,
-              "totalSteps": 5,
-              "status": "in_progress",
-              "message": "Inputs validated ✅"
-            }'
+          report_progress '{
+            "correlationId": "${{ inputs.zektCorrelationId }}",
+            "workflow": "provider",
+            "step": 2,
+            "totalSteps": 5,
+            "status": "in_progress",
+            "message": "Inputs validated ✅"
+          }'
 
       # ── Step 3: Generate HTML ─────────────────────────────────────────
       - name: "Step 3: Generate HTML page"
@@ -225,7 +248,12 @@ jobs:
 
       - name: "Report: HTML generated"
         run: |
-          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+          DEMO_API="${{ vars.ZEKT_DEMO_API }}"
+          if [ -z "$DEMO_API" ]; then
+            echo "::warning::ZEKT_DEMO_API not set — skipping progress report"
+            exit 0
+          fi
+          HTTP_CODE=$(curl -s -o /tmp/curl_response.txt -w "%{http_code}" -X POST "${DEMO_API}/api/demo/progress" \
             -H "Content-Type: application/json" \
             -d '{
               "correlationId": "${{ inputs.zektCorrelationId }}",
@@ -234,7 +262,12 @@ jobs:
               "totalSteps": 5,
               "status": "in_progress",
               "message": "HTML page generated ✅"
-            }'
+            }') || HTTP_CODE="000"
+          echo "📡 Progress report: HTTP $HTTP_CODE"
+          cat /tmp/curl_response.txt 2>/dev/null && echo
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::warning::Progress report failed with HTTP $HTTP_CODE"
+          fi
 
       # ── Step 4: Dispatch to consumer via zekt-action ──────────────────
       - name: "Step 4: Dispatch to consumer via Zekt"
@@ -252,7 +285,12 @@ jobs:
 
       - name: "Report: Dispatched to consumer"
         run: |
-          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+          DEMO_API="${{ vars.ZEKT_DEMO_API }}"
+          if [ -z "$DEMO_API" ]; then
+            echo "::warning::ZEKT_DEMO_API not set — skipping progress report"
+            exit 0
+          fi
+          HTTP_CODE=$(curl -s -o /tmp/curl_response.txt -w "%{http_code}" -X POST "${DEMO_API}/api/demo/progress" \
             -H "Content-Type: application/json" \
             -d '{
               "correlationId": "${{ inputs.zektCorrelationId }}",
@@ -261,12 +299,22 @@ jobs:
               "totalSteps": 5,
               "status": "in_progress",
               "message": "Page dispatched to consumer via Zekt ✅"
-            }'
+            }') || HTTP_CODE="000"
+          echo "📡 Progress report: HTTP $HTTP_CODE"
+          cat /tmp/curl_response.txt 2>/dev/null && echo
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::warning::Progress report failed with HTTP $HTTP_CODE"
+          fi
 
       # ── Step 5: Complete ──────────────────────────────────────────────
       - name: "Step 5: Build complete"
         run: |
-          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+          DEMO_API="${{ vars.ZEKT_DEMO_API }}"
+          if [ -z "$DEMO_API" ]; then
+            echo "::warning::ZEKT_DEMO_API not set — skipping progress report"
+            exit 0
+          fi
+          HTTP_CODE=$(curl -s -o /tmp/curl_response.txt -w "%{http_code}" -X POST "${DEMO_API}/api/demo/progress" \
             -H "Content-Type: application/json" \
             -d '{
               "correlationId": "${{ inputs.zektCorrelationId }}",
@@ -275,4 +323,9 @@ jobs:
               "totalSteps": 5,
               "status": "completed",
               "message": "Page built and dispatched to consumer ✅"
-            }'
+            }') || HTTP_CODE="000"
+          echo "📡 Progress report: HTTP $HTTP_CODE"
+          cat /tmp/curl_response.txt 2>/dev/null && echo
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::warning::Progress report failed with HTTP $HTTP_CODE"
+          fi
