@@ -1,0 +1,271 @@
+name: "Ship It - Build Page"
+
+on:
+  workflow_dispatch:
+    inputs:
+      zektDemoTemplate:
+        description: "Template: landing-page, status-badge, team-card"
+        required: true
+      zektDemoUserName:
+        description: "User's name"
+        required: true
+      zektDemoMessage:
+        description: "User's message"
+        required: true
+      zektDemoTheme:
+        description: "Color theme: ocean, sunset, forest, midnight, coral"
+        required: true
+      zektCorrelationId:
+        description: "Zekt correlation ID"
+        required: true
+
+jobs:
+  build-page:
+    runs-on: ubuntu-latest
+    steps:
+
+      # ── Step 1: Receive & report ──────────────────────────────────────
+      - name: "Step 1: Receive build config"
+        run: |
+          echo "📦 Received build config"
+          echo "  Template: ${{ inputs.zektDemoTemplate }}"
+          echo "  Name:     ${{ inputs.zektDemoUserName }}"
+          echo "  Message:  ${{ inputs.zektDemoMessage }}"
+          echo "  Theme:    ${{ inputs.zektDemoTheme }}"
+          echo "  Correlation: ${{ inputs.zektCorrelationId }}"
+
+          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "correlationId": "${{ inputs.zektCorrelationId }}",
+              "workflow": "provider",
+              "step": 1,
+              "totalSteps": 5,
+              "status": "in_progress",
+              "message": "Build config received",
+              "runId": "${{ github.run_id }}",
+              "runUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }'
+
+      # ── Step 2: Validate ──────────────────────────────────────────────
+      - name: "Step 2: Validate & sanitize"
+        run: |
+          echo "🔍 Validating inputs..."
+          sleep 1
+
+          TEMPLATE="${{ inputs.zektDemoTemplate }}"
+          if [[ ! "$TEMPLATE" =~ ^(landing-page|status-badge|team-card)$ ]]; then
+            echo "❌ Invalid template: $TEMPLATE"
+            curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "correlationId": "${{ inputs.zektCorrelationId }}",
+                "workflow": "provider",
+                "step": 2,
+                "totalSteps": 5,
+                "status": "failed",
+                "message": "Invalid template: '"$TEMPLATE"'"
+              }'
+            exit 1
+          fi
+
+          THEME="${{ inputs.zektDemoTheme }}"
+          if [[ ! "$THEME" =~ ^(ocean|sunset|forest|midnight|coral)$ ]]; then
+            echo "❌ Invalid theme: $THEME"
+            curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "correlationId": "${{ inputs.zektCorrelationId }}",
+                "workflow": "provider",
+                "step": 2,
+                "totalSteps": 5,
+                "status": "failed",
+                "message": "Invalid theme: '"$THEME"'"
+              }'
+            exit 1
+          fi
+
+          echo "✅ Inputs valid"
+
+          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "correlationId": "${{ inputs.zektCorrelationId }}",
+              "workflow": "provider",
+              "step": 2,
+              "totalSteps": 5,
+              "status": "in_progress",
+              "message": "Inputs validated ✅"
+            }'
+
+      # ── Step 3: Generate HTML ─────────────────────────────────────────
+      - name: "Step 3: Generate HTML page"
+        id: generate
+        run: |
+          echo "🏗️ Generating HTML page..."
+          sleep 2
+
+          python3 << 'PYEOF'
+          import base64, json, os, html as html_mod
+
+          template = os.environ.get("TEMPLATE", "landing-page")
+          name = html_mod.escape(os.environ.get("NAME", "Anonymous"))
+          message = html_mod.escape(os.environ.get("MESSAGE", "Hello from Zekt!"))
+          theme = os.environ.get("THEME", "ocean")
+          correlation = os.environ.get("CORRELATION", "unknown")
+
+          from datetime import datetime, timezone
+          timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          # Theme color maps
+          themes = {
+              "ocean":    ("#0077b6", "#00b4d8", "#001219"),
+              "sunset":   ("#e63946", "#f4a261", "#1a0a00"),
+              "forest":   ("#2d6a4f", "#52b788", "#0a1a0f"),
+              "midnight": ("#4361ee", "#7209b7", "#0a0a1a"),
+              "coral":    ("#ff6b6b", "#ffa07a", "#1a0a0a"),
+          }
+          primary, secondary, bg = themes.get(theme, themes["ocean"])
+
+          # Shared styles
+          shared_styles = f"""
+            * {{ margin:0; padding:0; box-sizing:border-box; }}
+            body {{
+              font-family:'Inter','Segoe UI',system-ui,sans-serif;
+              background:{bg};
+              color:#e0e0e0;
+              min-height:100vh;
+              display:flex; flex-direction:column; align-items:center; justify-content:center;
+              padding:24px;
+            }}
+            .badge {{
+              display:inline-block; padding:6px 14px; border-radius:20px; font-size:12px;
+              background:rgba(0,255,136,0.1); color:#00ff88; border:1px solid rgba(0,255,136,0.3);
+            }}
+            .footer {{
+              margin-top:32px; font-size:11px; color:#555; text-align:center; line-height:1.6;
+            }}
+            .footer a {{ color:{primary}; text-decoration:none; }}
+            .footer a:hover {{ text-decoration:underline; }}
+          """
+
+          if template == "landing-page":
+              body_html = f"""
+              <div style="background:#111; border:1px solid #333; border-radius:16px; padding:48px 40px; max-width:580px; width:100%; text-align:center;">
+                <h1 style="background:linear-gradient(135deg,{primary},{secondary}); -webkit-background-clip:text;
+                    -webkit-text-fill-color:transparent; font-size:32px; margin-bottom:16px;">{name}</h1>
+                <p style="font-size:18px; color:#ccc; margin-bottom:28px; line-height:1.6;">{message}</p>
+                <div class="badge">Deployed via Zekt 🚀</div>
+                <p class="footer">Correlation: {correlation} &middot; {timestamp}<br>
+                  <a href="https://zekt.io">Learn about Zekt &rarr;</a></p>
+              </div>"""
+
+          elif template == "status-badge":
+              body_html = f"""
+              <div style="background:#111; border:1px solid #333; border-radius:16px; padding:40px; max-width:480px; width:100%; text-align:center;">
+                <div style="font-size:48px; margin-bottom:12px;">✅</div>
+                <h1 style="font-size:22px; color:#fff; margin-bottom:4px;">{name}'s Service</h1>
+                <p style="font-size:16px; color:#00ff88; font-weight:600; margin-bottom:20px;">Operational</p>
+                <div style="background:#1a1a1a; border-radius:8px; padding:12px 16px; margin-bottom:20px;">
+                  <div style="height:8px; border-radius:4px; background:linear-gradient(90deg,{primary},{secondary}); width:100%;"></div>
+                  <p style="font-size:11px; color:#888; margin-top:8px;">Uptime: 99.97% &middot; Last checked: {timestamp}</p>
+                </div>
+                <p style="font-size:14px; color:#aaa; margin-bottom:20px;">{message}</p>
+                <div class="badge">Deployed via Zekt 🚀</div>
+                <p class="footer">Correlation: {correlation}<br>
+                  <a href="https://zekt.io">Learn about Zekt &rarr;</a></p>
+              </div>"""
+
+          elif template == "team-card":
+              body_html = f"""
+              <div style="background:#111; border:1px solid #333; border-radius:16px; padding:40px; max-width:420px; width:100%; text-align:center;">
+                <div style="width:80px; height:80px; border-radius:50%; margin:0 auto 16px;
+                     background:linear-gradient(135deg,{primary},{secondary}); display:flex; align-items:center;
+                     justify-content:center; font-size:36px; color:#fff; font-weight:700;">
+                  {name[0].upper() if name else "?"}
+                </div>
+                <h1 style="font-size:24px; color:#fff; margin-bottom:8px;">{name}</h1>
+                <p style="font-size:14px; color:#aaa; margin-bottom:20px; line-height:1.5;">{message}</p>
+                <div style="border-top:1px solid #333; padding-top:16px; margin-top:16px;">
+                  <div class="badge">Deployed via Zekt 🚀</div>
+                </div>
+                <p class="footer">Correlation: {correlation} &middot; {timestamp}<br>
+                  <a href="https://zekt.io">Learn about Zekt &rarr;</a></p>
+              </div>"""
+          else:
+              body_html = "<p>Unknown template</p>"
+
+          full_html = f"""<!DOCTYPE html>
+          <html lang="en"><head>
+          <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>{name}'s Page &mdash; Deployed by Zekt</title>
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+          <style>{shared_styles}</style>
+          </head><body>{body_html}</body></html>"""
+
+          encoded = base64.b64encode(full_html.encode()).decode()
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"html_b64={encoded}\n")
+
+          print(f"✅ Generated {len(full_html)} bytes of HTML ({template} / {theme})")
+          PYEOF
+        env:
+          TEMPLATE: ${{ inputs.zektDemoTemplate }}
+          NAME: ${{ inputs.zektDemoUserName }}
+          MESSAGE: ${{ inputs.zektDemoMessage }}
+          THEME: ${{ inputs.zektDemoTheme }}
+          CORRELATION: ${{ inputs.zektCorrelationId }}
+
+      - name: "Report: HTML generated"
+        run: |
+          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "correlationId": "${{ inputs.zektCorrelationId }}",
+              "workflow": "provider",
+              "step": 3,
+              "totalSteps": 5,
+              "status": "in_progress",
+              "message": "HTML page generated ✅"
+            }'
+
+      # ── Step 4: Dispatch to consumer via zekt-action ──────────────────
+      - name: "Step 4: Dispatch to consumer via Zekt"
+        uses: zekt-dev-org/zekt-action@v1
+        with:
+          payload: |
+            {
+              "html_b64": "${{ steps.generate.outputs.html_b64 }}",
+              "correlationId": "${{ inputs.zektCorrelationId }}",
+              "template": "${{ inputs.zektDemoTemplate }}",
+              "userName": "${{ inputs.zektDemoUserName }}",
+              "theme": "${{ inputs.zektDemoTheme }}"
+            }
+
+      - name: "Report: Dispatched to consumer"
+        run: |
+          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "correlationId": "${{ inputs.zektCorrelationId }}",
+              "workflow": "provider",
+              "step": 4,
+              "totalSteps": 5,
+              "status": "in_progress",
+              "message": "Page dispatched to consumer via Zekt ✅"
+            }'
+
+      # ── Step 5: Complete ──────────────────────────────────────────────
+      - name: "Step 5: Build complete"
+        run: |
+          curl -s -X POST "${{ vars.ZEKT_DEMO_API }}/api/demo/progress" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "correlationId": "${{ inputs.zektCorrelationId }}",
+              "workflow": "provider",
+              "step": 5,
+              "totalSteps": 5,
+              "status": "completed",
+              "message": "Page built and dispatched to consumer ✅"
+            }'
